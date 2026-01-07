@@ -134,21 +134,28 @@ export async function updateUserState(supabase, userState, userId = null) {
 /**
  * Create a new task record
  */
-export async function createUserTask(supabase, userId, chatId, taskId) {
+export async function createUserTask(supabase, userId, chatId, taskId, loadingMessageId = null) {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] Creating task record: ${taskId} for user ${userId}`);
 
   try {
+    const taskData = {
+      user_id: userId.toString(),
+      chat_id: chatId.toString(),
+      task_id: taskId,
+      state: 'waiting',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // Store loading message ID in result_json temporarily (we'll use it in callback)
+    if (loadingMessageId) {
+      taskData.result_json = JSON.stringify({ loadingMessageId });
+    }
+
     const { data, error } = await supabase
       .from('user_tasks')
-      .insert({
-        user_id: userId.toString(),
-        chat_id: chatId.toString(),
-        task_id: taskId,
-        state: 'waiting',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .insert(taskData)
       .select()
       .single();
 
@@ -160,6 +167,36 @@ export async function createUserTask(supabase, userId, chatId, taskId) {
     return data;
   } catch (error) {
     console.error(`[${timestamp}] Error in createUserTask:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Update task loading message ID
+ */
+export async function updateTaskLoadingMessage(supabase, taskId, loadingMessageId) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] Updating loading message for task ${taskId}`);
+
+  try {
+    const { data, error } = await supabase
+      .from('user_tasks')
+      .update({
+        result_json: JSON.stringify({ loadingMessageId }),
+        updated_at: new Date().toISOString()
+      })
+      .eq('task_id', taskId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`[${timestamp}] Error updating task loading message:`, error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error(`[${timestamp}] Error in updateTaskLoadingMessage:`, error);
     throw error;
   }
 }

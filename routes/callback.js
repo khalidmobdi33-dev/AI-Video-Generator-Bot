@@ -1,10 +1,13 @@
 import express from 'express';
 import { bot } from '../bot/bot.js';
-import { getUserState, updateUserState } from '../db/database.js';
+import { getUserState, updateUserState, saveGeneratedVideo, getYouTubeChannel } from '../db/database.js';
 import { createSupabaseClient } from '../db/supabase.js';
+import { getYouTubeUploadKeyboard, getMainKeyboard } from '../bot/messages.js';
 
 const router = express.Router();
 const supabase = createSupabaseClient();
+
+// No longer needed - polling is removed
 
 // Handle kie.ai callback
 router.post('/', async (req, res) => {
@@ -12,11 +15,22 @@ router.post('/', async (req, res) => {
   console.log(`[${timestamp}] Received callback from kie.ai:`, JSON.stringify(req.body, null, 2));
 
   try {
-    const { taskId, state, resultJson, failCode, failMsg } = req.body;
+    // Extract data from req.body.data (callback structure)
+    const callbackData = req.body.data || req.body;
+    const { taskId, state, resultJson, failCode, failMsg } = callbackData;
 
     if (!taskId) {
       console.error(`[${timestamp}] Callback missing taskId`);
       return res.status(400).json({ error: 'Missing taskId' });
+    }
+
+    // Stop polling for this task if it's still running
+    const pollingData = activePollingIntervals.get(taskId);
+    if (pollingData) {
+      clearInterval(pollingData.pollInterval);
+      clearInterval(pollingData.loadingInterval);
+      activePollingIntervals.delete(taskId);
+      console.log(`[${timestamp}] Stopped polling for task ${taskId} (callback received)`);
     }
 
     // Find user by taskId
@@ -41,6 +55,17 @@ router.post('/', async (req, res) => {
     const chatId = task.chat_id;
 
     console.log(`[${timestamp}] Processing callback for task ${taskId}, user ${userId}, state: ${state}`);
+
+    // Get loading message ID from task result_json (stored temporarily)
+    let loadingMessageId = null;
+    try {
+      if (task.result_json) {
+        const tempData = JSON.parse(task.result_json);
+        loadingMessageId = tempData.loadingMessageId;
+      }
+    } catch (e) {
+      // Ignore if result_json is not JSON or doesn't have loadingMessageId
+    }
 
     // Update task status
     await supabase
@@ -67,33 +92,97 @@ router.post('/', async (req, res) => {
 
       if (videoUrl) {
         console.log(`[${timestamp}] Task ${taskId} completed successfully, sending video to user ${userId}`);
-        await bot.sendMessage(chatId, '✅ تم توليد الفيديو بنجاح!');
-        await bot.sendVideo(chatId, videoUrl);
-
-        // Reset user state
+        
+        // Get user state to get prompt for library
         const userState = await getUserState(supabase, userId);
+        const prompt = userState?.prompt || null;
+        
+        // Save video to library
+        try {
+          await saveGeneratedVideo(supabase, userId, taskId, videoUrl, prompt);
+          console.log(`[${timestamp}] Video saved to library: taskId ${taskId}`);
+        } catch (saveError) {
+          console.error(`[${timestamp}] Error saving video to library:`, saveError);
+          // Continue even if save fails
+        }
+        
+        // Check if YouTube is configured
+        const youtubeChannel = await getYouTubeChannel(supabase, userId);
+        const hasYouTube = youtubeChannel !== null;
+        
+        // Replace loading message (hourglass emoji) with video
+        if (loadingMessageId) {
+          try {
+            // Delete the loading message
+            await bot.deleteMessage(chatId, loadingMessageId);
+            console.log(`[${timestamp}] Deleted loading message ${loadingMessageId} for task ${taskId}`);
+          } catch (deleteError) {
+            console.warn(`[${timestamp}] Could not delete loading message ${loadingMessageId}:`, deleteError.message);
+            // Continue even if deletion fails
+          }
+        }
+        
+        // Send success message and video
+        await bot.sendMessage(chatId, '✅ تم توليد الفيديو بنجاح!');
+        const videoMsg = await bot.sendVideo(chatId, videoUrl, hasYouTube ? getYouTubeUploadKeyboard() : undefined);
+
+        // Reset user state (but keep taskId for reference)
         if (userState) {
           userState.userId = userId.toString(); // Ensure userId is set
           userState.state = 'idle';
-          userState.taskId = null;
+          userState.taskId = taskId; // Keep taskId for potential YouTube upload
           await updateUserState(supabase, userState, userId);
         }
       } else {
         console.error(`[${timestamp}] No video URL in result for task ${taskId}`);
-        await bot.sendMessage(chatId, '❌ تم توليد الفيديو لكن لم يتم العثور على رابط الفيديو.');
+        await bot.sendMessage(chatId, '❌ تم توليد الفيديو لكن لم يتم العثور على رابط الفيديو.', getMainKeyboard());
+        
+        // Reset user state
+        const userState = await getUserState(supabase, userId);
+        if (userState) {
+          userState.userId = userId.toString();
+          userState.state = 'idle';
+          userState.taskId = null;
+          await updateUserState(supabase, userState, userId);
+        }
       }
     } else if (state === 'fail') {
       console.error(`[${timestamp}] Task ${taskId} failed: ${failMsg}`);
       
-      let errorMessage = '❌ فشل توليد الفيديو.';
-      if (failMsg) {
-        errorMessage += `\n\nالتفاصيل:\n${failMsg}`;
+      // Replace loading message with error message
+      if (loadingMessageId) {
+        try {
+          await bot.editMessageText('❌ فشل توليد الفيديو.', {
+            chat_id: chatId,
+            message_id: loadingMessageId
+          });
+        } catch (editError) {
+          // If edit fails, delete and send new message
+          try {
+            await bot.deleteMessage(chatId, loadingMessageId);
+          } catch (deleteError) {
+            // Ignore
+          }
+          
+          let errorMessage = '❌ فشل توليد الفيديو.';
+          if (failMsg) {
+            errorMessage += `\n\nالتفاصيل:\n${failMsg}`;
+          }
+          if (failCode) {
+            errorMessage += `\n\nرمز الخطأ: ${failCode}`;
+          }
+          await bot.sendMessage(chatId, errorMessage, getMainKeyboard());
+        }
+      } else {
+        let errorMessage = '❌ فشل توليد الفيديو.';
+        if (failMsg) {
+          errorMessage += `\n\nالتفاصيل:\n${failMsg}`;
+        }
+        if (failCode) {
+          errorMessage += `\n\nرمز الخطأ: ${failCode}`;
+        }
+        await bot.sendMessage(chatId, errorMessage, getMainKeyboard());
       }
-      if (failCode) {
-        errorMessage += `\n\nرمز الخطأ: ${failCode}`;
-      }
-
-      await bot.sendMessage(chatId, errorMessage);
 
       // Reset user state
       const userState = await getUserState(supabase, userId);

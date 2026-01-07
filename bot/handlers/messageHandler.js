@@ -1,7 +1,7 @@
 import { getUserState, updateUserState, createUserTask, saveYouTubeChannel, getYouTubeChannel, saveGeneratedVideo } from '../../db/database.js';
 import { validateVideo, validateImage } from '../../utils/validators.js';
 import { sendWelcomeMessage, sendVideoRequest, sendImageRequest, sendPromptRequest, sendYouTubeSetupStep1, sendYouTubeSetupStep2, sendYouTubeSetupStep3, sendYouTubeSetupSuccess, getYouTubeUploadKeyboard, getWelcomeMessage, getMainKeyboard } from '../messages.js';
-import { startVideoGeneration, checkTaskStatus } from '../../services/kieService.js';
+import { startVideoGeneration } from '../../services/kieService.js';
 import { convertVideoIfNeeded } from '../../utils/videoConverter.js';
 import { uploadVideoToStorage } from '../../utils/storage.js';
 import { verifyYouTubeCredentials } from '../../services/youtubeService.js';
@@ -408,13 +408,16 @@ export async function handleMessage(bot, msg, supabase) {
           userState.taskId = taskId;
           await updateUserState(supabase, userState, userId);
           
-          // Create task record in database
-          await createUserTask(supabase, userId, chatId, taskId);
+          // Send loading message with hourglass emoji only
+          const loadingMsg = await bot.sendMessage(chatId, '⏳');
+          const loadingMessageId = loadingMsg.message_id;
           
-          console.log(`[${timestamp}] Started video generation for user ${userId}, taskId: ${taskId}`);
+          // Create task record in database with loading message ID
+          await createUserTask(supabase, userId, chatId, taskId, loadingMessageId);
           
-          // Start polling for status
-          startStatusPolling(bot, chatId, userId, taskId, supabase);
+          console.log(`[${timestamp}] Started video generation for user ${userId}, taskId: ${taskId}, loadingMessageId: ${loadingMessageId}`);
+          
+          // No polling - just wait for callback
         } catch (error) {
           console.error(`[${timestamp}] Error starting video generation:`, error);
           userState.userId = userId.toString(); // Ensure userId is set
@@ -661,163 +664,5 @@ async function handleYouTubeUploadWithDescription(bot, chatId, userId, videoUrl,
   }
 }
 
-// Poll for task status
-async function startStatusPolling(bot, chatId, userId, taskId, supabase) {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] Starting status polling for task ${taskId}`);
-  
-  let loadingMessageId = null;
-  const loadingEmojis = ['⏳', '🔄', '⏳', '🔄'];
-  let emojiIndex = 0;
-  
-  // Send initial loading message
-  try {
-    const loadingMsg = await bot.sendMessage(chatId, `${loadingEmojis[0]} جاري توليد الفيديو...`);
-    loadingMessageId = loadingMsg.message_id;
-  } catch (error) {
-    console.error(`[${timestamp}] Error sending loading message:`, error);
-  }
-  
-  // Update loading message every 3 seconds
-  const loadingInterval = setInterval(async () => {
-    try {
-      if (loadingMessageId) {
-        emojiIndex = (emojiIndex + 1) % loadingEmojis.length;
-        await bot.editMessageText(
-          `${loadingEmojis[emojiIndex]} جاري توليد الفيديو...`,
-          { chat_id: chatId, message_id: loadingMessageId }
-        );
-      }
-    } catch (error) {
-      // Ignore edit errors (message might be deleted)
-    }
-  }, 3000);
-  
-  // Poll for status every 5 seconds
-  const pollInterval = setInterval(async () => {
-    try {
-      const status = await checkTaskStatus(taskId);
-      
-      const statusTimestamp = new Date().toISOString();
-      console.log(`[${statusTimestamp}] Task ${taskId} status: ${status.state}`);
-      
-      if (status.state === 'success') {
-        clearInterval(pollInterval);
-        clearInterval(loadingInterval);
-        
-        // Delete loading message
-        if (loadingMessageId) {
-          try {
-            await bot.deleteMessage(chatId, loadingMessageId);
-          } catch (error) {
-            // Ignore
-          }
-        }
-        
-        // Get result URLs
-        const resultJson = JSON.parse(status.resultJson);
-        const videoUrl = resultJson.resultUrls?.[0];
-        
-        if (videoUrl) {
-          console.log(`[${statusTimestamp}] Task ${taskId} completed successfully, sending video to user ${userId}`);
-          
-          // Get user state to get prompt for library
-          const userState = await getUserState(supabase, userId);
-          const prompt = userState?.prompt || null;
-          
-          // Save video to library
-          try {
-            await saveGeneratedVideo(supabase, userId, taskId, videoUrl, prompt);
-            console.log(`[${statusTimestamp}] Video saved to library: taskId ${taskId}`);
-          } catch (saveError) {
-            console.error(`[${statusTimestamp}] Error saving video to library:`, saveError);
-            // Continue even if save fails
-          }
-          
-          // Check if YouTube is configured
-          const youtubeChannel = await getYouTubeChannel(supabase, userId);
-          const hasYouTube = youtubeChannel !== null;
-          
-          // Delete loading message
-          if (loadingMessageId) {
-            try {
-              await bot.deleteMessage(chatId, loadingMessageId);
-            } catch (e) {
-              // Ignore if already deleted
-            }
-          }
-          
-          // Delete previous messages if they exist
-          if (userState && userState.currentMessageId) {
-            try {
-              await bot.deleteMessage(chatId, userState.currentMessageId);
-            } catch (e) {
-              // Ignore if already deleted
-            }
-          }
-          
-          await bot.sendMessage(chatId, '✅ تم توليد الفيديو بنجاح!');
-          await bot.sendVideo(chatId, videoUrl, hasYouTube ? getYouTubeUploadKeyboard() : getMainKeyboard());
-          
-          // Reset user state (but keep taskId for reference)
-          if (userState) {
-            userState.userId = userId.toString(); // Ensure userId is set
-            userState.state = 'idle';
-            // Don't clear taskId - keep it for reference, but it's now in library
-            await updateUserState(supabase, userState, userId);
-          }
-        } else {
-          throw new Error('No video URL in result');
-        }
-      } else if (status.state === 'fail') {
-        clearInterval(pollInterval);
-        clearInterval(loadingInterval);
-        
-        // Delete loading message
-        if (loadingMessageId) {
-          try {
-            await bot.deleteMessage(chatId, loadingMessageId);
-          } catch (error) {
-            // Ignore
-          }
-        }
-        
-        const errorTimestamp = new Date().toISOString();
-        console.error(`[${errorTimestamp}] Task ${taskId} failed: ${status.failMsg}`);
-        
-        let errorMessage = '❌ فشل توليد الفيديو.';
-        if (status.failMsg) {
-          errorMessage += `\n\nالتفاصيل:\n${status.failMsg}`;
-        }
-        if (status.failCode) {
-          errorMessage += `\n\nرمز الخطأ: ${status.failCode}`;
-        }
-        
-        await bot.sendMessage(chatId, errorMessage);
-        
-        // Reset user state
-        const userState = await getUserState(supabase, userId);
-        if (userState) {
-          userState.userId = userId.toString(); // Ensure userId is set
-          userState.state = 'idle';
-          userState.taskId = null;
-          await updateUserState(supabase, userState, userId);
-        }
-      }
-      // Continue polling for other states (waiting, queuing, generating)
-    } catch (error) {
-      const errorTimestamp = new Date().toISOString();
-      console.error(`[${errorTimestamp}] Error polling task status:`, error);
-      
-      // Don't clear intervals on error, continue polling
-    }
-  }, 5000);
-  
-  // Timeout after 10 minutes
-  setTimeout(() => {
-    clearInterval(pollInterval);
-    clearInterval(loadingInterval);
-    console.log(`[${new Date().toISOString()}] Status polling timeout for task ${taskId}`);
-  }, 600000);
-}
+// Polling removed - now using callback only
 
