@@ -1,0 +1,27 @@
+{
+  "name": "telegram-kie-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for video generation using kie.ai API",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": ["telegram", "bot", "kie.ai", "video-generation"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-telegram-bot-api": "^0.64.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "fluent-ffmpeg": "^2.1.2",
+    "ffmpeg-static": "^5.2.0",
+    "fs-extra": "^11.2.0",
+    "googleapis": "^128.0.0"
+  }
+}
+
