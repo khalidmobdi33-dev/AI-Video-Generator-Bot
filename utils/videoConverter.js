@@ -87,7 +87,7 @@ async function downloadVideo(url, outputPath) {
     console.log(`[${timestamp}] Video downloaded successfully`);
   } catch (error) {
     console.error(`[${timestamp}] Error downloading video:`, error);
-    throw new Error(`فشل تحميل الفيديو: ${error.message}`);
+    throw new Error(`Failed to download the video: ${error.message}`);
   }
 }
 
@@ -193,7 +193,7 @@ export async function convertVideoIfNeeded(videoUrl, mimeType, fileName) {
     };
   } catch (error) {
     console.error(`[${timestamp}] Error converting video:`, error);
-    throw new Error(`فشل تحويل الفيديو: ${error.message}`);
+    throw new Error(`Failed to download the video: ${error.message}`);
   }
 }
 
@@ -235,4 +235,5 @@ setInterval(() => {
     console.error(`[${new Date().toISOString()}] Error in scheduled cleanup:`, err);
   });
 }, 60 * 60 * 1000);
+
 
