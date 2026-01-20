@@ -53,7 +53,7 @@ bot.on('message', async (msg) => {
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Error handling message:`, error);
     try {
-      await bot.sendMessage(msg.chat.id, '❌ حدث خطأ أثناء معالجة الرسالة. يرجى المحاولة مرة أخرى.');
+      await bot.sendMessage(msg.chat.id, '❌ An error occurred while processing the message. Please try again.');
     } catch (sendError) {
       console.error(`[${new Date().toISOString()}] Error sending error message:`, sendError);
     }
@@ -69,7 +69,7 @@ bot.on('callback_query', async (query) => {
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Error handling callback query:`, error);
     try {
-      await bot.answerCallbackQuery(query.id, { text: '❌ حدث خطأ. يرجى المحاولة مرة أخرى.' });
+      await bot.answerCallbackQuery(query.id, { text: '❌ An error occurred. Please try again.' });
     } catch (answerError) {
       console.error(`[${new Date().toISOString()}] Error answering callback query:`, answerError);
     }
@@ -77,4 +77,3 @@ bot.on('callback_query', async (query) => {
 });
 
 export { bot as telegramBot };
-
