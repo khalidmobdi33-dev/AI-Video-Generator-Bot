@@ -15,7 +15,7 @@ export async function handleVideoLibrary(bot, chatId, userId, supabase, messageI
     const videos = await getUserGeneratedVideos(supabase, userId, 20);
     
     if (!videos || videos.length === 0) {
-      const message = '📚 مكتبة الفيديوهات\n\n❌ لا توجد فيديوهات في المكتبة بعد.\n\nابدأ بتوليد فيديو جديد!';
+      const message = '📚 Video Library\n\n❌ There are no videos in the library yet.\n\nStart generating a new video!';
       const { getMainKeyboard } = await import('../messages.js');
       if (messageId) {
         await bot.editMessageText(message, { 
@@ -38,7 +38,7 @@ export async function handleVideoLibrary(bot, chatId, userId, supabase, messageI
     const videosToShow = videos.slice(0, 10);
     videosToShow.forEach((video, index) => {
       const date = new Date(video.created_at).toLocaleDateString('ar-SA');
-      const prompt = video.prompt ? video.prompt.substring(0, 25) + '...' : 'بدون وصف';
+      const prompt = video.prompt ? video.prompt.substring(0, 25) + '...' : 'No description';
       const buttonText = `🎬 ${index + 1}. ${prompt}`;
       
       keyboard.keyboard.push([
@@ -48,13 +48,13 @@ export async function handleVideoLibrary(bot, chatId, userId, supabase, messageI
     
     // Add back button
     keyboard.keyboard.push([
-      { text: '🔙 القائمة الرئيسية' }
+      { text: '🔙 Main Menu' }
     ]);
     
     keyboard.resize_keyboard = true;
     keyboard.one_time_keyboard = false;
     
-    const message = `📚 مكتبة الفيديوهات\n\nاختر الفيديو الذي تريد نشره على يوتيوب:\n\nإجمالي الفيديوهات: ${videos.length}`;
+    const message = `📚 Video Library\n\nSelect the video you want to publish on YouTube:\n\nTotal videos: ${videos.length}`;
     
     if (messageId) {
       await bot.editMessageText(message, { 
@@ -67,7 +67,7 @@ export async function handleVideoLibrary(bot, chatId, userId, supabase, messageI
     }
   } catch (error) {
     console.error(`[${timestamp}] Error showing video library:`, error);
-    await bot.sendMessage(chatId, '❌ حدث خطأ أثناء تحميل المكتبة. يرجى المحاولة مرة أخرى.');
+    await bot.sendMessage(chatId, '❌ An error occurred while loading the library. Please try again.');
   }
 }
 
@@ -82,7 +82,7 @@ export async function handleViewVideoFromButton(bot, chatId, userId, buttonText,
     // Extract video index from button text (format: "🎬 1. prompt...")
     const match = buttonText.match(/🎬\s*(\d+)\./);
     if (!match) {
-      await bot.sendMessage(chatId, '❌ خطأ في اختيار الفيديو. يرجى المحاولة مرة أخرى.');
+      await bot.sendMessage(chatId, '❌ Error selecting the video. Please try again.');
       return;
     }
     
@@ -90,7 +90,7 @@ export async function handleViewVideoFromButton(bot, chatId, userId, buttonText,
     
     const videos = await getUserGeneratedVideos(supabase, userId, 20);
     if (videoIndex < 0 || videoIndex >= videos.length) {
-      await bot.sendMessage(chatId, '❌ الفيديو المحدد غير موجود.');
+      await bot.sendMessage(chatId, '❌ The selected video does not exist.');
       return;
     }
     
@@ -104,10 +104,10 @@ export async function handleViewVideoFromButton(bot, chatId, userId, buttonText,
     const keyboard = {
       keyboard: [
         [
-          { text: '📺 رفع على يوتيوب' }
+          { text: '📺 Upload to YouTube' }
         ],
         [
-          { text: '🔙 القائمة الرئيسية' }
+          { text: '🔙 Main Menu' }
         ]
       ],
       resize_keyboard: true,
@@ -123,9 +123,9 @@ export async function handleViewVideoFromButton(bot, chatId, userId, buttonText,
       await updateUserState(supabase, userState, userId);
     }
     
-    const prompt = video.prompt || 'بدون وصف';
+    const prompt = video.prompt || 'No description';
     const date = new Date(video.created_at).toLocaleDateString('ar-SA');
-    const message = `🎬 الفيديو المحدد\n\n📝 الوصف: ${prompt}\n📅 التاريخ: ${date}\n\n${hasYouTube ? 'يمكنك نشر هذا الفيديو على يوتيوب الآن!' : '⚠️ يجب إعداد قناة يوتيوب أولاً.'}`;
+    const message = `🎬 Selected Video\n\n📝 Description: ${prompt}\n📅 Date: ${date}\n\n${hasYouTube ? 'You can publish this video on YouTube now!' : '⚠️ You must set up a YouTube channel first.'}`;
     
     // Send video first
     await bot.sendVideo(chatId, video.video_url);
@@ -134,7 +134,7 @@ export async function handleViewVideoFromButton(bot, chatId, userId, buttonText,
     await bot.sendMessage(chatId, message, { reply_markup: keyboard });
   } catch (error) {
     console.error(`[${timestamp}] Error viewing video:`, error);
-    await bot.sendMessage(chatId, '❌ حدث خطأ أثناء عرض الفيديو. يرجى المحاولة مرة أخرى.');
+    await bot.sendMessage(chatId, '❌ An error occurred while displaying the video. Please try again.');
   }
 }
 
@@ -150,7 +150,7 @@ export async function handleYouTubeUploadFromLibrary(bot, chatId, userId, taskId
     const youtubeChannel = await getYouTubeChannel(supabase, userId);
     
     if (!youtubeChannel) {
-      await bot.sendMessage(chatId, '⚠️ لم يتم إعداد قناة يوتيوب بعد.\n\nيرجى إعداد القناة أولاً باستخدام زر "⚙️ إعداد قناة يوتيوب"', getMainKeyboard());
+      await bot.sendMessage(chatId, '⚠️ YouTube channel has not been set up yet.\n\nPlease set up the channel first using the "⚙️ YouTube Channel Setup" button', getMainKeyboard());
       return;
     }
     
@@ -159,7 +159,7 @@ export async function handleYouTubeUploadFromLibrary(bot, chatId, userId, taskId
     const video = await getGeneratedVideoByTaskId(supabase, taskId);
     
     if (!video) {
-      await bot.sendMessage(chatId, '❌ لم يتم العثور على الفيديو في المكتبة.');
+      await bot.sendMessage(chatId, '❌ Video not found in the library.');
       return;
     }
     
@@ -170,14 +170,14 @@ export async function handleYouTubeUploadFromLibrary(bot, chatId, userId, taskId
     const uploadRecord = await createYouTubeUpload(supabase, userId, taskId, videoUrl);
     
     // Send uploading message
-    const uploadingMsg = await bot.sendMessage(chatId, '📤 جاري رفع الفيديو على يوتيوب...');
+    const uploadingMsg = await bot.sendMessage(chatId, '📤 Uploading video to YouTube...');
     
     try {
       // Upload to YouTube
       const uploadResult = await uploadToYouTube(
         videoUrl,
         `${prompt} - ${new Date().toLocaleDateString('ar-SA')}`,
-        `تم توليد هذا الفيديو باستخدام الذكاء الاصطناعي\n\nالوصف: ${prompt}`,
+        `This video was generated using artificial intelligence\n\nDescription: ${prompt}`,
         youtubeChannel.client_id,
         youtubeChannel.client_secret,
         youtubeChannel.refresh_token
@@ -198,7 +198,7 @@ export async function handleYouTubeUploadFromLibrary(bot, chatId, userId, taskId
       // Send success message with link
       await bot.sendMessage(
         chatId,
-        `✅ تم نشر الفيديو على يوتيوب بنجاح!\n\n📺 رابط الفيديو:\n${uploadResult.shortsUrl}\n\n🎉 يمكنك الآن مشاهدته على قناتك!`,
+        `✅ The video has been published on YouTube successfully!\n\n📺 Video link:\n${uploadResult.shortsUrl}\n\n🎉 You can now watch it on your channel!`,
         getMainKeyboard()
       );
     } catch (uploadError) {
@@ -218,13 +218,12 @@ export async function handleYouTubeUploadFromLibrary(bot, chatId, userId, taskId
       // Send error message
       await bot.sendMessage(
         chatId,
-        `❌ فشل رفع الفيديو على يوتيوب.\n\nالتفاصيل:\n${uploadError.message}\n\nيرجى التحقق من إعدادات القناة والمحاولة مرة أخرى.`,
+        `❌ Failed to upload the video to YouTube.\n\nDetails:\n${uploadError.message}\n\nPlease check your channel settings and try again.`,
         getMainKeyboard()
       );
     }
   } catch (error) {
     console.error(`[${timestamp}] Error uploading video from library:`, error);
-    await bot.sendMessage(chatId, '❌ حدث خطأ أثناء معالجة الطلب. يرجى المحاولة مرة أخرى.');
+    await bot.sendMessage(chatId, '❌ An error occurred while processing the request. Please try again.');
   }
 }
-
