@@ -46,7 +46,7 @@ export async function handleCallbackQuery(bot, query, supabase) {
       await sendYouTubeSetupStep1(bot, chatId, query.message.message_id);
       break;
     
-    // upload_youtube is now handled via text message "📺 رفع على يوتيوب"
+    // upload_youtube is now handled via text message "📺 Upload to YouTube"
     // Removed from here
     
     case 'video_library':
@@ -54,7 +54,7 @@ export async function handleCallbackQuery(bot, query, supabase) {
       break;
     
     case 'back_to_main':
-      await bot.editMessageText('👋 القائمة الرئيسية', { 
+      await bot.editMessageText('👋 Main Menu', { 
         chat_id: chatId, 
         message_id: query.message.message_id,
         reply_markup: getMainKeyboard().reply_markup
@@ -74,7 +74,7 @@ export async function handleCallbackQuery(bot, query, supabase) {
         cancelState.taskId = null;
         await updateUserState(supabase, cancelState, userId);
       }
-      await bot.sendMessage(chatId, '✅ تم إلغاء العملية. ابدأ من جديد باستخدام /start', getMainKeyboard());
+      await bot.sendMessage(chatId, '✅ The operation has been canceled. Start again using /start', getMainKeyboard());
       break;
     
     default:
@@ -91,14 +91,14 @@ async function handleYouTubeUpload(bot, chatId, userId, supabase) {
     
     if (!youtubeChannel) {
       // Channel not configured, ask user to set it up
-      await bot.sendMessage(chatId, '⚠️ لم يتم إعداد قناة يوتيوب بعد.\n\nيرجى إعداد القناة أولاً باستخدام زر "⚙️ إعداد قناة يوتيوب"', getMainKeyboard());
+      await bot.sendMessage(chatId, '⚠️ YouTube channel is not set up yet.\n\nPlease set up the channel first using the "⚙️ Set Up YouTube Channel" button', getMainKeyboard());
       return;
     }
     
     // Get user state to find the generated video
     const userState = await getUserState(supabase, userId);
     if (!userState || !userState.taskId) {
-      await bot.sendMessage(chatId, '❌ لم يتم العثور على فيديو منشأ. يرجى توليد فيديو جديد أولاً.');
+      await bot.sendMessage(chatId, '❌ No generated video was found. Please generate a new video first.');
       return;
     }
     
@@ -110,7 +110,7 @@ async function handleYouTubeUpload(bot, chatId, userId, supabase) {
       .single();
     
     if (!tasks || tasks.state !== 'success') {
-      await bot.sendMessage(chatId, '❌ الفيديو لم يكتمل بعد أو فشل التوليد.');
+      await bot.sendMessage(chatId, '❌ The video is not completed yet or generation failed.');
       return;
     }
     
@@ -118,7 +118,7 @@ async function handleYouTubeUpload(bot, chatId, userId, supabase) {
     const videoUrl = resultJson.resultUrls?.[0];
     
     if (!videoUrl) {
-      await bot.sendMessage(chatId, '❌ لم يتم العثور على رابط الفيديو.');
+      await bot.sendMessage(chatId, '❌ Video URL was not found.');
       return;
     }
     
@@ -126,14 +126,14 @@ async function handleYouTubeUpload(bot, chatId, userId, supabase) {
     const uploadRecord = await createYouTubeUpload(supabase, userId, taskId, videoUrl);
     
     // Send uploading message
-    const uploadingMsg = await bot.sendMessage(chatId, '📤 جاري رفع الفيديو على يوتيوب...');
+    const uploadingMsg = await bot.sendMessage(chatId, '📤 Uploading the video to YouTube...');
     
     try {
       // Upload to YouTube
       const uploadResult = await uploadToYouTube(
         videoUrl,
         `AI Generated Video - ${new Date().toLocaleDateString('ar-SA')}`,
-        'تم توليد هذا الفيديو باستخدام الذكاء الاصطناعي',
+        'This video was generated using artificial intelligence',
         youtubeChannel.client_id,
         youtubeChannel.client_secret,
         youtubeChannel.refresh_token
@@ -154,7 +154,7 @@ async function handleYouTubeUpload(bot, chatId, userId, supabase) {
       // Send success message with link
       await bot.sendMessage(
         chatId,
-        `✅ تم نشر الفيديو على يوتيوب بنجاح!\n\n📺 رابط الفيديو:\n${uploadResult.shortsUrl}\n\n🎉 يمكنك الآن مشاهدته على قناتك!`,
+        `✅ The video has been published on YouTube successfully!\n\n📺 Video link:\n${uploadResult.shortsUrl}\n\n🎉 You can now watch it on your channel!`,
         getMainKeyboard()
       );
     } catch (uploadError) {
@@ -174,12 +174,12 @@ async function handleYouTubeUpload(bot, chatId, userId, supabase) {
       // Send error message
       await bot.sendMessage(
         chatId,
-        `❌ فشل رفع الفيديو على يوتيوب.\n\nالتفاصيل:\n${uploadError.message}\n\nيرجى التحقق من إعدادات القناة والمحاولة مرة أخرى.`,
+        `❌ Failed to upload the video to YouTube.\n\nDetails:\n${uploadError.message}\n\nPlease check the channel settings and try again.`,
         getMainKeyboard()
       );
     }
   } catch (error) {
     console.error(`[${timestamp}] Error handling YouTube upload:`, error);
-    await bot.sendMessage(chatId, '❌ حدث خطأ أثناء معالجة الطلب. يرجى المحاولة مرة أخرى.');
+    await bot.sendMessage(chatId, '❌ An error occurred while processing the request. Please try again.');
   }
 }
