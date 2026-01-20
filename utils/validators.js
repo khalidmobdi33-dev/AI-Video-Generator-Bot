@@ -19,14 +19,14 @@ export async function validateVideo(url, fileSize) {
   if (fileSize > MAX_VIDEO_SIZE) {
     return {
       valid: false,
-      error: `حجم الفيديو كبير جداً. الحد الأقصى هو ${MAX_VIDEO_SIZE / (1024 * 1024)} MB.\nالحجم الحالي: ${(fileSize / (1024 * 1024)).toFixed(2)} MB`
+      error: `Video size is too large. The maximum allowed size is ${MAX_VIDEO_SIZE / (1024 * 1024)} MB.\nCurrent size: ${(fileSize / (1024 * 1024)).toFixed(2)} MB`
     };
   }
 
   if (fileSize === 0) {
     return {
       valid: false,
-      error: 'الملف فارغ. يرجى إرسال فيديو صحيح.'
+      error: 'The file is empty. Please send a valid video.'
     };
   }
 
@@ -68,7 +68,7 @@ export async function validateVideo(url, fileSize) {
     if (contentType && !contentType.includes('video') && !contentType.includes('application/octet-stream')) {
       return {
         valid: false,
-        error: `نوع الفيديو غير مدعوم. الصيغ المدعومة: MP4, MOV, MKV.\nالنوع الحالي: ${contentType}`
+        error: `Unsupported video type. Supported formats: MP4, MOV, MKV.\nCurrent type: ${contentType}`
       };
     }
 
@@ -100,14 +100,14 @@ export async function validateImage(url, fileSize) {
   if (fileSize > MAX_IMAGE_SIZE) {
     return {
       valid: false,
-      error: `حجم الصورة كبير جداً. الحد الأقصى هو ${MAX_IMAGE_SIZE / (1024 * 1024)} MB.\nالحجم الحالي: ${(fileSize / (1024 * 1024)).toFixed(2)} MB`
+      error: `Image size is too large. The maximum allowed size is ${MAX_IMAGE_SIZE / (1024 * 1024)} MB.\nCurrent size: ${(fileSize / (1024 * 1024)).toFixed(2)} MB`
     };
   }
 
   if (fileSize === 0) {
     return {
       valid: false,
-      error: 'الملف فارغ. يرجى إرسال صورة صحيحة.'
+      error: 'The file is empty. Please send a valid image.'
     };
   }
 
@@ -151,7 +151,7 @@ export async function validateImage(url, fileSize) {
     if (contentType && !contentType.includes('image') && !contentType.includes('application/octet-stream')) {
       return {
         valid: false,
-        error: `نوع الصورة غير مدعوم. الصيغ المدعومة: JPEG, PNG, WEBP.\nالنوع الحالي: ${contentType}`
+        error: `Unsupported image type. Supported formats: JPEG, PNG, WEBP.\nCurrent type: ${contentType}`
       };
     }
 
@@ -172,4 +172,3 @@ export async function validateImage(url, fileSize) {
     return { valid: true };
   }
 }
-
