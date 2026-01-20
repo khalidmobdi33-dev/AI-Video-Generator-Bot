@@ -120,7 +120,7 @@ router.post('/', async (req, res) => {
         }
         
         // Send success message and video
-        await bot.sendMessage(chatId, '✅ تم توليد الفيديو بنجاح!');
+        await bot.sendMessage(chatId, 'The video was generated successfully!✅');
         const videoMsg = await bot.sendVideo(chatId, videoUrl, hasYouTube ? getYouTubeUploadKeyboard() : undefined);
 
         // Reset user state (but keep taskId for reference)
@@ -132,7 +132,7 @@ router.post('/', async (req, res) => {
         }
       } else {
         console.error(`[${timestamp}] No video URL in result for task ${taskId}`);
-        await bot.sendMessage(chatId, '❌ تم توليد الفيديو لكن لم يتم العثور على رابط الفيديو.', getMainKeyboard());
+        await bot.sendMessage(chatId, 'The video was generated, but the video link could not be found.❌', getMainKeyboard());
         
         // Reset user state
         const userState = await getUserState(supabase, userId);
@@ -149,7 +149,7 @@ router.post('/', async (req, res) => {
       // Replace loading message with error message
       if (loadingMessageId) {
         try {
-          await bot.editMessageText('❌ فشل توليد الفيديو.', {
+          await bot.editMessageText('Failed to generate the video.❌', {
             chat_id: chatId,
             message_id: loadingMessageId
           });
@@ -161,25 +161,25 @@ router.post('/', async (req, res) => {
             // Ignore
           }
           
-          let errorMessage = '❌ فشل توليد الفيديو.';
+          let errorMessage = 'Failed to generate the video. ❌';
           if (failMsg) {
-            errorMessage += `\n\nالتفاصيل:\n${failMsg}`;
-          }
-          if (failCode) {
-            errorMessage += `\n\nرمز الخطأ: ${failCode}`;
-          }
-          await bot.sendMessage(chatId, errorMessage, getMainKeyboard());
-        }
-      } else {
-        let errorMessage = '❌ فشل توليد الفيديو.';
-        if (failMsg) {
-          errorMessage += `\n\nالتفاصيل:\n${failMsg}`;
-        }
-        if (failCode) {
-          errorMessage += `\n\nرمز الخطأ: ${failCode}`;
-        }
-        await bot.sendMessage(chatId, errorMessage, getMainKeyboard());
-      }
+  errorMessage += `\n\nDetails:\n${failMsg}`;
+}
+if (failCode) {
+  errorMessage += `\n\nError code: ${failCode}`;
+}
+await bot.sendMessage(chatId, errorMessage, getMainKeyboard());
+}
+} else {
+  let errorMessage = '❌ Failed to generate the video.';
+  if (failMsg) {
+    errorMessage += `\n\nDetails:\n${failMsg}`;
+  }
+  if (failCode) {
+    errorMessage += `\n\nError code: ${failCode}`;
+  }
+  await bot.sendMessage(chatId, errorMessage, getMainKeyboard());
+}
 
       // Reset user state
       const userState = await getUserState(supabase, userId);
@@ -200,4 +200,5 @@ router.post('/', async (req, res) => {
 });
 
 export { router as callbackRouter };
+
 
